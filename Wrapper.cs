@@ -104,14 +104,14 @@ namespace FAExportOAuthWrapper {
         Enter the values of your FurAffinity ""a"" and ""b"" session cookies.<br />
         See the <a href='https://faexport.spangle.org.uk/docs' target='_blank'>FAExport</a> documentation for more info about how to obtain these.
     </p>
-    <form action='postback' method='post' class='form-inline'>
+    <form action='postback' method='post'>
         {0}
         <div class='form-group mr-2'>
-            <label for='a'>""a""</label>
+            <label for='a'>a</label>
             <input type='text' name='a' id='a' class='form-control' />
         </div>
         <div class='form-group mr-2'>
-            <label for='b'>""b""</label>
+            <label for='b'>b</label>
             <input type='text' name='b' id='b' class='form-control' />
         </div>
         <input type='submit' value='Submit' class='btn btn-primary' />
@@ -137,7 +137,7 @@ namespace FAExportOAuthWrapper {
         /// * state - a copy of the state parameter sent with the /auth request, if any
         /// </summary>
         [FunctionName("postback")]
-        public static IActionResult Postback([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req) {
+        public static async Task<IActionResult> Postback([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = null)] HttpRequest req) {
             string client_id = req.Form["client_id"];
             string client_secret = GetClientSecret(client_id);
             if (client_secret == null)
@@ -157,6 +157,40 @@ namespace FAExportOAuthWrapper {
             string b = req.Form["b"];
             if (b == null)
                 return new BadRequestResult();
+
+            try {
+                try {
+                    var hreq = WebRequest.CreateHttp("https://faexport.spangle.org.uk/notifications/submissions.json");
+                    hreq.UserAgent = "faexport-oauth2-wrapper/0.0 (https://github.com/IsaacSchemm/faexport-oauth2-wrapper)";
+                    hreq.Headers["FA_COOKIE"] = $"b={b}; a={a}";
+
+                    using (var resp = await hreq.GetResponseAsync())
+                    using (var sr = new StreamReader(resp.GetResponseStream())) { }
+                } catch (WebException ex) when (ex.Response is HttpWebResponse resp) {
+                    using (var sr = new StreamReader(resp.GetResponseStream())) {
+                        string json = await sr.ReadToEndAsync();
+                        var response_obj = JsonConvert.DeserializeAnonymousType(json, new {
+                            error = ""
+                        });
+
+                        return new ContentResult {
+                            Content = string.Format(@"FAExport returned an error:
+{0}
+
+Press the Back button to try again.
+", response_obj.error),
+                            ContentType = "text/plain",
+                            StatusCode = (int)resp.StatusCode
+                        };
+                    }
+                }
+            } catch (Exception) {
+                return new ContentResult {
+                    Content = "Could not connect to FAExport.",
+                    ContentType = "text/plain",
+                    StatusCode = (int)HttpStatusCode.BadGateway
+                };
+            }
 
             query["code"] = Encrypt(client_secret, $"b={b}; a={a}");
 
