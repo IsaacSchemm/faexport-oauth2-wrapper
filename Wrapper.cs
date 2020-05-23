@@ -248,51 +248,10 @@ Press the Back button to try again.
 
             string faCookie = Decrypt(client_secret, code);
 
-            var hreq = WebRequest.CreateHttp("https://faexport.spangle.org.uk/notifications/submissions.json");
-            hreq.UserAgent = "faexport-oauth2-wrapper/0.0 (https://github.com/IsaacSchemm/faexport-oauth2-wrapper)";
-            hreq.Headers["FA_COOKIE"] = faCookie;
-            try {
-                using (var resp = await hreq.GetResponseAsync())
-                using (var sr = new StreamReader(resp.GetResponseStream())) {
-                    string json = await sr.ReadToEndAsync();
-                    var response_obj = JsonConvert.DeserializeAnonymousType(json, new {
-                        current_user = new {
-                            name = "",
-                            profile = "",
-                            profile_name = ""
-                        }
-                    });
-
-                    return new OkObjectResult(new {
-                        access_token = faCookie,
-                        token_type = "facookie",
-                        response_obj.current_user.name,
-                        response_obj.current_user.profile,
-                        response_obj.current_user.profile_name
-                    });
-                }
-            } catch (WebException ex) when (ex.Response is HttpWebResponse resp) {
-                try {
-                    using (var sr = new StreamReader(resp.GetResponseStream())) {
-                        string json = await sr.ReadToEndAsync();
-                        var response_obj = JsonConvert.DeserializeAnonymousType(json, new {
-                            error = ""
-                        });
-
-                        return new OkObjectResult(new {
-                            error = "invalid_grant",
-                            error_description = response_obj.error
-                        });
-                    }
-                } catch (Exception) { }
-
-                return new OkObjectResult(new {
-                    error = "invalid_grant",
-                    error_description = "Credentials rejected by FurAffinity or FAExport"
-                });
-            } catch (WebException) {
-                return new StatusCodeResult((int)HttpStatusCode.BadGateway);
-            }
+            return new OkObjectResult(new {
+                access_token = faCookie,
+                token_type = "facookie"
+            });
         }
     }
 }
